@@ -12,27 +12,42 @@ namespace Tool
     {
         public static void Main(string[] args)
         {
-            Console.WriteLine("=== 小说工具 ===");
-            Console.WriteLine("1. 按章节拆分小说为JSON文件");
-            Console.Write("请选择：");
-
-            var input = Console.ReadLine();
-
-            switch (input)
+            while (true)
             {
-                case "1":
-                    Console.Write("请输入小说txt路径：");
-                    var path = Console.ReadLine();
+                Console.WriteLine("=== 小说工具 ===");
+                Console.WriteLine("1. 按章节拆分小说为JSON文件");
+                Console.WriteLine("0. 退出");
+                Console.Write("请选择：");
 
-                    var splitter = new NovelSplitter();
-                    splitter.SplitToJsonFiles(path);
+                var input = Console.ReadLine();
+                Console.WriteLine();
 
-                    Console.WriteLine("处理完成");
-                    break;
+                switch (input)
+                {
+                    case "1":
+                        var path = NovelSplitter.SelectTxtFileFromSourceDirectory();
+                        if (string.IsNullOrWhiteSpace(path))
+                        {
+                            Console.WriteLine();
+                            break;
+                        }
 
-                default:
-                    Console.WriteLine("无效选项");
-                    break;
+                        var splitter = new NovelSplitter();
+                        splitter.SplitToJsonFiles(path);
+
+                        Console.WriteLine("处理完成");
+                        Console.WriteLine();
+                        break;
+
+                    case "0":
+                        Console.WriteLine("已退出");
+                        return;
+
+                    default:
+                        Console.WriteLine("无效选项");
+                        Console.WriteLine();
+                        break;
+                }
             }
         }
     }
@@ -43,8 +58,8 @@ namespace Tool
         public class ChapterData
         {
             public int ChapterIndex { get; set; }
-            public string ChapterName { get; set; }
-            public string Content { get; set; }
+            public string ChapterName { get; set; } = string.Empty;
+            public string Content { get; set; } = string.Empty;
         }
 
         public void SplitToJsonFiles(string filePath)
@@ -130,6 +145,72 @@ namespace Tool
             }
 
             return result;
+        }
+
+        public static string? SelectTxtFileFromSourceDirectory()
+        {
+            var sourceDir = FindSourceDirectory();
+            if (string.IsNullOrWhiteSpace(sourceDir))
+            {
+                Console.WriteLine("未找到工程目录下的“原文”文件夹");
+                return null;
+            }
+
+            var files = Directory.GetFiles(sourceDir, "*.txt", SearchOption.TopDirectoryOnly);
+            Array.Sort(files, StringComparer.CurrentCultureIgnoreCase);
+
+            if (files.Length == 0)
+            {
+                Console.WriteLine($"“原文”文件夹中没有txt文件：{sourceDir}");
+                return null;
+            }
+
+            Console.WriteLine("请选择小说txt文件：");
+            Console.WriteLine("0. 返回");
+            for (var i = 0; i < files.Length; i++)
+            {
+                Console.WriteLine($"{i + 1}. {Path.GetFileName(files[i])}");
+            }
+
+            Console.Write("请输入序号：");
+            var input = Console.ReadLine();
+
+            if (!int.TryParse(input, out var index) || index < 0 || index > files.Length)
+            {
+                Console.WriteLine("无效序号");
+                return null;
+            }
+
+            if (index == 0)
+            {
+                return null;
+            }
+
+            return files[index - 1];
+        }
+
+        private static string? FindSourceDirectory()
+        {
+            return FindSourceDirectoryFrom(Directory.GetCurrentDirectory())
+                   ?? FindSourceDirectoryFrom(AppContext.BaseDirectory);
+        }
+
+        private static string? FindSourceDirectoryFrom(string startPath)
+        {
+            var dir = new DirectoryInfo(startPath);
+
+            while (dir != null)
+            {
+                var sourceDir = Path.Combine(dir.FullName, "原文");
+                if (Directory.Exists(sourceDir))
+                {
+                    return sourceDir;
+                }
+
+                dir = dir.Parent;
+            }
+
+            return null;
         }
     }
 }

@@ -1,0 +1,6 @@
+D:\practice\XiaoShuo\Tool\Tool\bin\Release\net11.0\publish\Tool.exe
+D:\practice\XiaoShuo\Tool\Tool\bin\Release\net11.0\publish\Tool.dll
+D:\practice\XiaoShuo\Tool\Tool\bin\Release\net11.0\publish\Tool.deps.json
+D:\practice\XiaoShuo\Tool\Tool\bin\Release\net11.0\publish\Tool.runtimeconfig.json
+D:\practice\XiaoShuo\Tool\Tool\bin\Release\net11.0\publish\Tool.pdb
+D:\practice\XiaoShuo\Tool\Tool\bin\Release\net11.0\publish\Newtonsoft.Json.dll
