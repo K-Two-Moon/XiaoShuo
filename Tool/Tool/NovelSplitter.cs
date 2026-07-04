@@ -4,7 +4,7 @@ using Newtonsoft.Json;
 
 namespace Tool;
 
-public class NovelSplitter
+internal class NovelSplitter
 {
     public class ChapterData
     {
@@ -46,7 +46,7 @@ public class NovelSplitter
 
         var parentDir = Directory.GetParent(dir)?.FullName ?? dir;
         var novelName = Path.GetFileNameWithoutExtension(filePath);
-        var outputDir = Path.Combine(parentDir, $"{novelName}_章节");
+        var outputDir = Path.Combine(parentDir, Program.ChapterSplitFolderName, $"{novelName}_章节");
         Directory.CreateDirectory(outputDir);
 
         for (var i = 0; i < chapters.Count; i++)
@@ -124,71 +124,5 @@ public class NovelSplitter
         }
 
         return $"{order:0000}_{rawName}.json";
-    }
-
-    public static string? SelectTxtFileFromSourceDirectory()
-    {
-        var sourceDir = FindSourceDirectory();
-        if (string.IsNullOrWhiteSpace(sourceDir))
-        {
-            Console.WriteLine("未找到工程目录下的“原文”文件夹");
-            return null;
-        }
-
-        var files = Directory.GetFiles(sourceDir, "*.txt", SearchOption.TopDirectoryOnly);
-        Array.Sort(files, StringComparer.CurrentCultureIgnoreCase);
-
-        if (files.Length == 0)
-        {
-            Console.WriteLine($"“原文”文件夹中没有txt文件：{sourceDir}");
-            return null;
-        }
-
-        Console.WriteLine("请选择小说txt文件：");
-        Console.WriteLine("0. 返回");
-        for (var i = 0; i < files.Length; i++)
-        {
-            Console.WriteLine($"{i + 1}. {Path.GetFileName(files[i])}");
-        }
-
-        Console.Write("请输入序号：");
-        var input = Console.ReadLine();
-
-        if (!int.TryParse(input, out var index) || index < 0 || index > files.Length)
-        {
-            Console.WriteLine("无效序号");
-            return null;
-        }
-
-        if (index == 0)
-        {
-            return null;
-        }
-
-        return Path.GetRelativePath(Directory.GetCurrentDirectory(), files[index - 1]);
-    }
-
-    private static string? FindSourceDirectory()
-    {
-        return FindSourceDirectoryFrom(Directory.GetCurrentDirectory())
-               ?? FindSourceDirectoryFrom(AppContext.BaseDirectory);
-    }
-
-    private static string? FindSourceDirectoryFrom(string startPath)
-    {
-        var dir = new DirectoryInfo(startPath);
-
-        while (dir != null)
-        {
-            var sourceDir = Path.Combine(dir.FullName, "原文");
-            if (Directory.Exists(sourceDir))
-            {
-                return sourceDir;
-            }
-
-            dir = dir.Parent;
-        }
-
-        return null;
     }
 }
