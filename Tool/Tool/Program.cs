@@ -9,9 +9,10 @@ namespace Tool
     internal class Program
     {
         // 原文文件夹名
-        public const string SourceFolderName = "原文";
+        public const string sourceFolderName = "原文";
+        public const string chapterSplitFolderName = "章节拆分";
         // 摘要文件夹名
-        public const string ChapterSplitFolderName = "章节拆分";
+        public const string summaryFolderName = "摘要";
         public static void Main(string[] args)
         {
             while (true)
@@ -28,7 +29,7 @@ namespace Tool
                 switch (input)
                 {
                     case "1":
-                        var path = SelectTxtFileFromSourceDirectory(SourceFolderName);
+                        var path = SelectTxtFileFromSourceDirectory(sourceFolderName);
                         if (string.IsNullOrWhiteSpace(path))
                         {
                             Console.WriteLine();
@@ -43,14 +44,21 @@ namespace Tool
                         break;
 
                     case "2":
-                        var summaryPath = FindSourceDirectory(ChapterSplitFolderName);
-                        if (string.IsNullOrWhiteSpace(summaryPath))
+                        var chapterSplitPath = FindSourceDirectory(chapterSplitFolderName);
+                        if (string.IsNullOrWhiteSpace(chapterSplitPath))
                         {
                             Console.WriteLine("未找到工程目录下的“章节拆分”文件夹");
                             Console.WriteLine();
                             break;
                         }
-                        NovelSummarizer summarizer = new NovelSummarizer(summaryPath);
+                        var summaryFolderPath = FindSourceDirectory(summaryFolderName);
+                        if (string.IsNullOrWhiteSpace(summaryFolderPath))
+                        {
+                            Console.WriteLine("未找到工程目录下的“摘要”文件夹");
+                            Console.WriteLine();
+                            break;
+                        }
+                        NovelSummarizer summarizer = new NovelSummarizer(chapterSplitPath, summaryFolderPath);
                         summarizer.run();
                         Console.WriteLine("处理完成");
                         break;
@@ -67,9 +75,9 @@ namespace Tool
             }
         }
 
-        public static string? SelectTxtFileFromSourceDirectory(string sourceFolderName)
+        public static string? SelectTxtFileFromSourceDirectory(string folderName)
         {
-            var sourceDir = FindSourceDirectory(sourceFolderName);
+            var sourceDir = FindSourceDirectory(folderName);
             if (string.IsNullOrWhiteSpace(sourceDir))
             {
                 Console.WriteLine("未找到工程目录下的“原文”文件夹");
@@ -109,19 +117,19 @@ namespace Tool
             return Path.GetRelativePath(Directory.GetCurrentDirectory(), files[index - 1]);
         }
 
-        private static string? FindSourceDirectory(string sourceFolderName)
+        private static string? FindSourceDirectory(string folderName)
         {
-            return FindSourceDirectoryFrom(Directory.GetCurrentDirectory(), sourceFolderName)
-                   ?? FindSourceDirectoryFrom(AppContext.BaseDirectory, sourceFolderName);
+            return FindSourceDirectoryFrom(Directory.GetCurrentDirectory(), folderName)
+                   ?? FindSourceDirectoryFrom(AppContext.BaseDirectory, folderName);
         }
 
-        private static string? FindSourceDirectoryFrom(string startPath, string sourceFolderName)
+        private static string? FindSourceDirectoryFrom(string startPath, string folderName)
         {
             var dir = new DirectoryInfo(startPath);
 
             while (dir != null)
             {
-                var sourceDir = Path.Combine(dir.FullName, sourceFolderName);
+                var sourceDir = Path.Combine(dir.FullName, folderName);
                 if (Directory.Exists(sourceDir))
                 {
                     return sourceDir;

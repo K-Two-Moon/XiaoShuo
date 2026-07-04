@@ -46,7 +46,7 @@ internal class NovelSplitter
 
         var parentDir = Directory.GetParent(dir)?.FullName ?? dir;
         var novelName = Path.GetFileNameWithoutExtension(filePath);
-        var outputDir = Path.Combine(parentDir, Program.ChapterSplitFolderName, $"{novelName}_章节");
+        var outputDir = Path.Combine(parentDir, Program.chapterSplitFolderName, $"{novelName}_章节");
         Directory.CreateDirectory(outputDir);
 
         for (var i = 0; i < chapters.Count; i++)
