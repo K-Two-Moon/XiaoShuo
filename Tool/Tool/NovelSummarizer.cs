@@ -309,35 +309,30 @@ internal class NovelSummarizer
     private static string BuildPrompt(NovelSplitter.ChapterData chapter)
     {
         return $"""
-请阅读下面这一章小说正文，并按 JSON Schema 输出章节摘要。
+Read the following Chinese novel chapter and output a concise JSON summary that matches the JSON Schema.
 
-要求：
-1. 只能输出符合 schema 的 JSON，不要输出 Markdown 或解释。
-2. 字段必须完整。
-3. 如果某个字段在本章没有明确内容，填“无”。
-4. 摘要要基于正文，不要补写正文没有出现的信息。
+Rules:
+1. Output only JSON. No Markdown or explanation.
+2. Use exactly the schema fields. Keep every value short and avoid repetition.
+3. Base the summary only on the chapter text. Do not invent missing information.
+4. 情节概括 must combine setup/development/turning/climax/resolution in 1-3 short Chinese sentences; do not split them into separate fields.
+5. 人物心情变化, 人物性格改变, 当前时间线 and 增量信息: write "无" if there is no clear change/information.
+6. Write all string values in Chinese.
 
-章节数：{chapter.ChapterIndex}
-章节名：{chapter.ChapterName}
+章节数: {chapter.ChapterIndex}
+章节名: {chapter.ChapterName}
 
-字段说明：
-- 章节数：当前章节数。
-- 铺垫：本章前段设置的人物、场景、问题或线索。
-- 发展：事件如何推进。
-- 转折：本章关键变化或意外。
-- 高潮：冲突或情绪最强处。
-- 收束：本章末尾如何结束、留下什么状态。
-- 核心事件：本章最重要的事件。
-- 叙述主线：本章叙事推进的主线。
-- 情感主线：本章情绪和关系变化的主线。
-- 人物变化：重要人物在处境、认知、关系或能力上的变化。
-- 心情：重要人物的主要心情。
-- 性格：本章体现出的人物性格特征。
-- 感情：人物之间的感情变化。
-- 信息增量：新增设定、线索、背景、关系、目标、能力或风险。
-- 当前时间线：本章所处时间点、先后关系或时间推进；不明确填“无”。
+Fields:
+- 章节数: current chapter number.
+- 情节概括: combined plot summary, 1-3 short sentences.
+- 叙述主线: narrative through-line, 1 sentence.
+- 情感主线: feelings/relationship changes toward family, friends, lover, enemy, strangers, etc.; write "无" if no clear change.
+- 人物心情变化: important characters' mood changes, brief; write "无" if no clear change.
+- 人物性格改变: important characters' personality or behavioral tendency changes, brief; write "无" if no clear change.
+- 当前时间线: time point, sequence, or time progression, brief; write "无" if unclear.
+- 增量信息: new settings, clues, background, relationships, goals, abilities, or risks, brief; write "无" if none.
 
-正文：
+正文:
 {chapter.Content}
 """;
     }
@@ -364,18 +359,11 @@ internal class NovelSummarizer
 
     private sealed record ChapterSummary(
         [property: JsonPropertyName("章节数")] int ChapterIndex,
-        [property: JsonPropertyName("铺垫")] string Setup,
-        [property: JsonPropertyName("发展")] string Development,
-        [property: JsonPropertyName("转折")] string TurningPoint,
-        [property: JsonPropertyName("高潮")] string Climax,
-        [property: JsonPropertyName("收束")] string Resolution,
-        [property: JsonPropertyName("核心事件")] string CoreEvent,
+        [property: JsonPropertyName("情节概括")] string PlotSummary,
         [property: JsonPropertyName("叙述主线")] string NarrativeLine,
         [property: JsonPropertyName("情感主线")] string EmotionalLine,
-        [property: JsonPropertyName("人物变化")] string CharacterChange,
-        [property: JsonPropertyName("心情")] string Mood,
-        [property: JsonPropertyName("性格")] string Personality,
-        [property: JsonPropertyName("感情")] string RelationshipEmotion,
-        [property: JsonPropertyName("信息增量")] string NewInformation,
-        [property: JsonPropertyName("当前时间线")] string CurrentTimeline);
+        [property: JsonPropertyName("人物心情变化")] string MoodChange,
+        [property: JsonPropertyName("人物性格改变")] string PersonalityChange,
+        [property: JsonPropertyName("当前时间线")] string CurrentTimeline,
+        [property: JsonPropertyName("增量信息")] string NewInformation);
 }
