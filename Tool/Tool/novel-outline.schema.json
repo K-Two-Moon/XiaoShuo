@@ -1,0 +1,152 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "大纲标题",
+    "起始章节数",
+    "结束章节数",
+    "总体概述",
+    "核心冲突",
+    "叙事主线",
+    "情感主线",
+    "阶段大纲",
+    "人物脉络",
+    "设定与线索",
+    "阶段衔接"
+  ],
+  "properties": {
+    "大纲标题": {
+      "type": "string",
+      "description": "根据所选章节内容概括出的简短中文标题。"
+    },
+    "起始章节数": {
+      "type": "integer"
+    },
+    "结束章节数": {
+      "type": "integer"
+    },
+    "总体概述": {
+      "type": "string",
+      "description": "概括所选章节的起因、发展、转折和阶段结果。"
+    },
+    "核心冲突": {
+      "type": "string",
+      "description": "这一章节范围内最重要的矛盾、目标或悬念。"
+    },
+    "叙事主线": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "情感主线": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "阶段大纲": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "阶段名称",
+          "起始章节数",
+          "结束章节数",
+          "阶段概述",
+          "主要事件",
+          "关键转折",
+          "阶段结果"
+        ],
+        "properties": {
+          "阶段名称": { "type": "string" },
+          "起始章节数": { "type": "integer" },
+          "结束章节数": { "type": "integer" },
+          "阶段概述": { "type": "string" },
+          "主要事件": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["涉及章节", "事件", "作用"],
+              "properties": {
+                "涉及章节": {
+                  "type": "array",
+                  "items": { "type": "integer" }
+                },
+                "事件": { "type": "string" },
+                "作用": { "type": "string" }
+              }
+            }
+          },
+          "关键转折": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "阶段结果": { "type": "string" }
+        }
+      }
+    },
+    "人物脉络": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "人物",
+          "阶段目标",
+          "主要行动",
+          "心理或性格变化",
+          "关系变化"
+        ],
+        "properties": {
+          "人物": { "type": "string" },
+          "阶段目标": { "type": "string" },
+          "主要行动": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "心理或性格变化": { "type": "string" },
+          "关系变化": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "设定与线索": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["内容", "涉及章节", "类型", "状态", "大纲作用"],
+        "properties": {
+          "内容": { "type": "string" },
+          "涉及章节": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "类型": {
+            "type": "string",
+            "enum": ["设定", "线索", "伏笔", "能力", "关系", "目标", "风险", "其他"]
+          },
+          "状态": {
+            "type": "string",
+            "enum": ["新增", "发展", "回收", "未明"]
+          },
+          "大纲作用": { "type": "string" }
+        }
+      }
+    },
+    "阶段衔接": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["前一阶段", "后一阶段", "衔接说明"],
+        "properties": {
+          "前一阶段": { "type": "string" },
+          "后一阶段": { "type": "string" },
+          "衔接说明": { "type": "string" }
+        }
+      }
+    }
+  }
+}

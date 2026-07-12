@@ -18,6 +18,7 @@
 !/Tool/
 !/Tool/**/
 !/Tool/**/*.cs
+!/Tool/Tool/novel-outline.schema.json
 
 # 不同步构建产物中的生成源码。
 /Tool/**/bin/

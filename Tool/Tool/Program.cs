@@ -13,6 +13,7 @@ namespace Tool
         public const string chapterSplitFolderName = "章节拆分";
         // 摘要文件夹名
         public const string summaryFolderName = "摘要";
+        public const string outlineFolderName = "大纲";
         public static void Main(string[] args)
         {
             while (true)
@@ -20,6 +21,7 @@ namespace Tool
                 Console.WriteLine("=== 小说工具 ===");
                 Console.WriteLine("1. 按章节拆分小说为JSON文件");
                 Console.WriteLine("2. 按章读取小说JSON文件生成章节摘要");
+                Console.WriteLine("3. 合并章节摘要并生成结构化大纲");
                 Console.WriteLine("0. 退出");
                 Console.Write("请选择：");
 
@@ -63,6 +65,24 @@ namespace Tool
                         Console.WriteLine("处理完成");
                         break;
 
+                    case "3":
+                    {
+                        var summaryRootPath = FindSourceDirectory(summaryFolderName);
+                        if (string.IsNullOrWhiteSpace(summaryRootPath))
+                        {
+                            Console.WriteLine("未找到工程目录下的“摘要”文件夹");
+                            Console.WriteLine();
+                            break;
+                        }
+
+                        var projectRootPath = Directory.GetParent(summaryRootPath)?.FullName
+                                              ?? Directory.GetCurrentDirectory();
+                        var outlineRootPath = Path.Combine(projectRootPath, outlineFolderName);
+                        var outlineGenerator = new NovelOutlineGenerator(summaryRootPath, outlineRootPath);
+                        outlineGenerator.Run();
+                        Console.WriteLine();
+                        break;
+                    }
                     case "0":
                         Console.WriteLine("已退出");
                         return;
