@@ -20,6 +20,9 @@
 !/大纲改写/
 !/大纲改写/**
 
+!/Tool/Tool/
+!/Tool/Tool/**
+
 # 只同步 Tool 下的 C# 源码文件。
 !/Tool/
 !/Tool/**/
