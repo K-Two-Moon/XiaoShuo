@@ -61,10 +61,15 @@ internal sealed class NovelChapterGenerator
             return;
         }
 
+        if (!ReadGenerationRange(outline, out var generationStartChapter, out var generationEndChapter))
+        {
+            return;
+        }
+
         var bookName = GetBookName(outlinePath, outline.Title);
         var bookOutputPath = Path.Combine(contentRootPath, bookName);
-        var totalCount = outline.EndChapter - outline.StartChapter + 1;
-        var existingCount = Enumerable.Range(outline.StartChapter, totalCount)
+        var totalCount = generationEndChapter - generationStartChapter + 1;
+        var existingCount = Enumerable.Range(generationStartChapter, totalCount)
             .Count(number => FindExistingChapterFile(bookOutputPath, number) is not null);
         var pendingCount = totalCount - existingCount;
 
@@ -73,7 +78,8 @@ internal sealed class NovelChapterGenerator
         Console.WriteLine($"已读取配置：{Path.GetRelativePath(rewrittenOutlineRootPath, configPath)}");
         Console.WriteLine($"大纲标题：{outline.Title}");
         Console.WriteLine($"书名文件夹：{bookName}");
-        Console.WriteLine($"章节范围：第 {outline.StartChapter} 章至第 {outline.EndChapter} 章，共 {totalCount} 章");
+        Console.WriteLine($"大纲章节范围：第 {outline.StartChapter} 章至第 {outline.EndChapter} 章");
+        Console.WriteLine($"本次生成范围：第 {generationStartChapter} 章至第 {generationEndChapter} 章，共 {totalCount} 章");
         Console.WriteLine($"章节字数：{config.MinimumLength}-{config.MaximumLength}");
         Console.WriteLine($"输出目录：{bookOutputPath}");
         if (existingCount > 0)
@@ -95,9 +101,12 @@ internal sealed class NovelChapterGenerator
         }
 
         Directory.CreateDirectory(bookOutputPath);
-        string? previousChapterText = null;
-        for (var chapterNumber = outline.StartChapter;
-             chapterNumber <= outline.EndChapter;
+        var previousChapterPath = FindExistingChapterFile(bookOutputPath, generationStartChapter - 1);
+        string? previousChapterText = previousChapterPath is null
+            ? null
+            : TryReadText(previousChapterPath);
+        for (var chapterNumber = generationStartChapter;
+             chapterNumber <= generationEndChapter;
              chapterNumber++)
         {
             var existingPath = FindExistingChapterFile(bookOutputPath, chapterNumber);
@@ -109,7 +118,7 @@ internal sealed class NovelChapterGenerator
             }
 
             Console.WriteLine();
-            Console.WriteLine($"正在生成第 {chapterNumber} 章（{chapterNumber - outline.StartChapter + 1}/{totalCount}）……");
+            Console.WriteLine($"正在生成第 {chapterNumber} 章（{chapterNumber - generationStartChapter + 1}/{totalCount}）……");
             try
             {
                 var output = CallAi(
@@ -155,6 +164,49 @@ internal sealed class NovelChapterGenerator
 
         Console.WriteLine();
         Console.WriteLine($"正文生成完成：{bookOutputPath}");
+    }
+
+    private static bool ReadGenerationRange(
+        OutlineInfo outline,
+        out int generationStartChapter,
+        out int generationEndChapter)
+    {
+        generationStartChapter = 0;
+        generationEndChapter = 0;
+
+        Console.WriteLine();
+        Console.WriteLine($"所选大纲可生成章节范围：第 {outline.StartChapter} 章至第 {outline.EndChapter} 章");
+        Console.Write("请输入生成的起始章节数：");
+        if (!int.TryParse(Console.ReadLine(), out generationStartChapter))
+        {
+            Console.WriteLine("起始章节数无效。");
+            return false;
+        }
+
+        Console.Write("请输入生成的结束章节数：");
+        if (!int.TryParse(Console.ReadLine(), out generationEndChapter))
+        {
+            Console.WriteLine("结束章节数无效。");
+            return false;
+        }
+
+        if (generationStartChapter <= 0
+            || generationEndChapter <= 0
+            || generationStartChapter > generationEndChapter)
+        {
+            Console.WriteLine("起始章节数和结束章节数必须为正整数，且起始章节数不能大于结束章节数。");
+            return false;
+        }
+
+        if (generationStartChapter < outline.StartChapter
+            || generationEndChapter > outline.EndChapter)
+        {
+            Console.WriteLine(
+                $"生成范围必须位于所选大纲的第 {outline.StartChapter} 章至第 {outline.EndChapter} 章之间。");
+            return false;
+        }
+
+        return true;
     }
 
     private string? SelectOutlineFile()
