@@ -15,6 +15,7 @@ namespace Tool
         public const string summaryFolderName = "摘要";
         public const string outlineFolderName = "大纲";
         public const string rewrittenOutlineFolderName = "大纲改写";
+        public const string contentFolderName = "正文";
         public static void Main(string[] args)
         {
             while (true)
@@ -24,10 +25,12 @@ namespace Tool
                 Console.WriteLine("2. 按章读取小说JSON文件生成章节摘要");
                 Console.WriteLine("3. 合并章节摘要并生成结构化大纲");
                 Console.WriteLine("4. 修改已有大纲的题材和风格");
+                Console.WriteLine("5. 初始化大纲配置（为后续生成正文做准备）");
+                Console.WriteLine("6. 根据改写大纲和配置逐章生成正文");
                 Console.WriteLine("0. 退出");
                 Console.Write("请选择：");
 
-                var input = Console.ReadLine();
+                var input = Console.ReadLine()?.Trim();
                 Console.WriteLine();
 
                 switch (input)
@@ -102,6 +105,41 @@ namespace Tool
                             outlineRootPath,
                             rewrittenOutlineRootPath);
                         outlineRewriter.Run();
+                        Console.WriteLine();
+                        break;
+                    }
+                    case "5":
+                    {
+                        var rewrittenOutlineRootPath = FindSourceDirectory(rewrittenOutlineFolderName);
+                        if (string.IsNullOrWhiteSpace(rewrittenOutlineRootPath))
+                        {
+                            Console.WriteLine("未找到工程目录下的“大纲改写”文件夹");
+                            Console.WriteLine();
+                            break;
+                        }
+
+                        var configInitializer = new NovelOutlineConfigInitializer(rewrittenOutlineRootPath);
+                        configInitializer.Run();
+                        Console.WriteLine();
+                        break;
+                    }
+                    case "6":
+                    {
+                        var rewrittenOutlineRootPath = FindSourceDirectory(rewrittenOutlineFolderName);
+                        if (string.IsNullOrWhiteSpace(rewrittenOutlineRootPath))
+                        {
+                            Console.WriteLine("未找到工程目录下的“大纲改写”文件夹");
+                            Console.WriteLine();
+                            break;
+                        }
+
+                        var projectRootPath = Directory.GetParent(rewrittenOutlineRootPath)?.FullName
+                                              ?? Directory.GetCurrentDirectory();
+                        var contentRootPath = Path.Combine(projectRootPath, contentFolderName);
+                        var chapterGenerator = new NovelChapterGenerator(
+                            rewrittenOutlineRootPath,
+                            contentRootPath);
+                        chapterGenerator.Run();
                         Console.WriteLine();
                         break;
                     }
