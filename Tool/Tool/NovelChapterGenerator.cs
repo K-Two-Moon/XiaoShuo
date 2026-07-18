@@ -1,72 +1,78 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Tool;
 
-/// <summary>根据改写大纲和同目录配置逐章生成正文。</summary>
+/// <summary>根据“新改写摘要”中每章对应的摘要和正文风格配置逐章生成正文。</summary>
 internal sealed class NovelChapterGenerator
 {
-    private const string ConfigFileName = "大纲配置.json";
+    private const string ConfigFileName = "正文风格配置.json";
+    private const string SummaryFileSearchPattern = "*_改写摘要.json";
     private const string ChapterSchemaFileName = "novel-chapter.schema.json";
     private const string CodexCommandEnvironmentVariable = "CODEX_CMD";
     private const string CodexCommandPathEnvironmentVariable = "CODEX_CMD_PATH";
-    private static readonly UTF8Encoding Utf8WithoutBom = new(false);
 
-    private readonly string rewrittenOutlineRootPath;
+    private static readonly UTF8Encoding Utf8WithoutBom = new(false);
+    private static readonly JsonSerializerOptions PromptJsonOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
+    private readonly string rewrittenSummaryRootPath;
     private readonly string contentRootPath;
 
-    public NovelChapterGenerator(string rewrittenOutlineRootPath, string contentRootPath)
+    public NovelChapterGenerator(string rewrittenSummaryRootPath, string contentRootPath)
     {
-        this.rewrittenOutlineRootPath = rewrittenOutlineRootPath;
+        this.rewrittenSummaryRootPath = rewrittenSummaryRootPath;
         this.contentRootPath = contentRootPath;
     }
 
     public void Run()
     {
-        if (!Directory.Exists(rewrittenOutlineRootPath))
+        if (!Directory.Exists(rewrittenSummaryRootPath))
         {
-            Console.WriteLine($"大纲改写目录不存在：{rewrittenOutlineRootPath}");
+            Console.WriteLine($"新改写摘要目录不存在：{rewrittenSummaryRootPath}");
             return;
         }
 
-        var outlinePath = SelectOutlineFile();
-        if (outlinePath is null)
+        var summaryDirectory = SelectSummaryDirectory();
+        if (summaryDirectory is null)
         {
             return;
         }
 
-        var configPath = Path.Combine(Path.GetDirectoryName(outlinePath)!, ConfigFileName);
+        var configPath = Path.Combine(summaryDirectory, ConfigFileName);
         if (!File.Exists(configPath))
         {
-            Console.WriteLine($"所选大纲同目录下没有“{ConfigFileName}”，请先运行选项 5。");
+            Console.WriteLine($"所选小说摘要目录下没有“{ConfigFileName}”，请先运行选项 5。");
             return;
         }
 
-        string outlineJson;
+        ChapterSummaries summaries;
         string configJson;
-        OutlineInfo outline;
         GenerationConfig config;
         try
         {
-            outlineJson = File.ReadAllText(outlinePath, Encoding.UTF8);
+            summaries = ReadChapterSummaries(summaryDirectory);
             configJson = File.ReadAllText(configPath, Encoding.UTF8);
-            outline = ParseOutline(outlineJson, Path.GetFileName(outlinePath));
             config = ParseConfig(configJson);
         }
         catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException)
         {
-            Console.WriteLine($"读取大纲或配置失败：{ex.Message}");
+            Console.WriteLine($"读取改写摘要或正文风格配置失败：{ex.Message}");
             return;
         }
 
-        if (!ReadGenerationRange(outline, out var generationStartChapter, out var generationEndChapter))
+        if (!ReadGenerationRange(summaries, out var generationStartChapter, out var generationEndChapter))
         {
             return;
         }
 
-        var bookName = GetBookName(outlinePath, outline.Title);
+        var bookName = SanitizePathSegment(Path.GetFileName(summaryDirectory), "未命名小说", 80);
         var bookOutputPath = Path.Combine(contentRootPath, bookName);
         var totalCount = generationEndChapter - generationStartChapter + 1;
         var existingCount = Enumerable.Range(generationStartChapter, totalCount)
@@ -74,14 +80,13 @@ internal sealed class NovelChapterGenerator
         var pendingCount = totalCount - existingCount;
 
         Console.WriteLine();
-        Console.WriteLine($"已选择大纲：{Path.GetRelativePath(rewrittenOutlineRootPath, outlinePath)}");
-        Console.WriteLine($"已读取配置：{Path.GetRelativePath(rewrittenOutlineRootPath, configPath)}");
-        Console.WriteLine($"大纲标题：{outline.Title}");
-        Console.WriteLine($"书名文件夹：{bookName}");
-        Console.WriteLine($"大纲章节范围：第 {outline.StartChapter} 章至第 {outline.EndChapter} 章");
+        Console.WriteLine($"已选择改写摘要目录：{Path.GetRelativePath(rewrittenSummaryRootPath, summaryDirectory)}");
+        Console.WriteLine($"已读取正文风格配置：{Path.GetRelativePath(rewrittenSummaryRootPath, configPath)}");
+        Console.WriteLine($"摘要章节范围：第 {summaries.StartChapter} 章至第 {summaries.EndChapter} 章");
         Console.WriteLine($"本次生成范围：第 {generationStartChapter} 章至第 {generationEndChapter} 章，共 {totalCount} 章");
         Console.WriteLine($"章节字数：{config.MinimumLength}-{config.MaximumLength}");
         Console.WriteLine($"输出目录：{bookOutputPath}");
+        Console.WriteLine("每次调用 AI 仅传入当前章节摘要和正文风格配置，不传入整套改写摘要。");
         if (existingCount > 0)
         {
             Console.WriteLine($"检测到 {existingCount} 个已生成章节，将跳过；本次待生成 {pendingCount} 章。");
@@ -101,10 +106,6 @@ internal sealed class NovelChapterGenerator
         }
 
         Directory.CreateDirectory(bookOutputPath);
-        var previousChapterPath = FindExistingChapterFile(bookOutputPath, generationStartChapter - 1);
-        string? previousChapterText = previousChapterPath is null
-            ? null
-            : TryReadText(previousChapterPath);
         for (var chapterNumber = generationStartChapter;
              chapterNumber <= generationEndChapter;
              chapterNumber++)
@@ -113,7 +114,6 @@ internal sealed class NovelChapterGenerator
             if (existingPath is not null)
             {
                 Console.WriteLine($"跳过第 {chapterNumber} 章，文件已存在：{Path.GetFileName(existingPath)}");
-                previousChapterText = TryReadText(existingPath);
                 continue;
             }
 
@@ -121,12 +121,8 @@ internal sealed class NovelChapterGenerator
             Console.WriteLine($"正在生成第 {chapterNumber} 章（{chapterNumber - generationStartChapter + 1}/{totalCount}）……");
             try
             {
-                var output = CallAi(
-                    outlineJson,
-                    configJson,
-                    config,
-                    chapterNumber,
-                    previousChapterText);
+                var currentSummaryJson = summaries.ByChapter[chapterNumber].ToJsonString(PromptJsonOptions);
+                var output = CallAi(configJson, config, chapterNumber, currentSummaryJson);
                 var chapter = ParseGeneratedChapter(output, chapterNumber);
                 var chapterText = $"第{chapter.Number}章 {chapter.Title}{Environment.NewLine}{Environment.NewLine}" +
                                   $"{chapter.Content.Trim()}{Environment.NewLine}";
@@ -147,27 +143,23 @@ internal sealed class NovelChapterGenerator
                 {
                     Console.WriteLine($"提示：本章字数未落在配置范围 {config.MinimumLength}-{config.MaximumLength} 内。");
                 }
-
-                previousChapterText = chapterText;
             }
             catch (Exception ex) when (ex is IOException
-                                       or JsonException
                                        or InvalidOperationException
-                                       or UnauthorizedAccessException
+                                       or JsonException
                                        or System.ComponentModel.Win32Exception)
             {
                 Console.WriteLine($"第 {chapterNumber} 章生成失败：{ex.Message}");
-                Console.WriteLine("已生成章节会保留；重新运行选项 6 可从缺失章节继续。");
+                Console.WriteLine("已停止，修复问题后重新运行即可从未完成章节继续。");
                 return;
             }
         }
 
-        Console.WriteLine();
         Console.WriteLine($"正文生成完成：{bookOutputPath}");
     }
 
     private static bool ReadGenerationRange(
-        OutlineInfo outline,
+        ChapterSummaries summaries,
         out int generationStartChapter,
         out int generationEndChapter)
     {
@@ -175,7 +167,7 @@ internal sealed class NovelChapterGenerator
         generationEndChapter = 0;
 
         Console.WriteLine();
-        Console.WriteLine($"所选大纲可生成章节范围：第 {outline.StartChapter} 章至第 {outline.EndChapter} 章");
+        Console.WriteLine($"所选改写摘要可生成章节范围：第 {summaries.StartChapter} 章至第 {summaries.EndChapter} 章");
         Console.Write("请输入生成的起始章节数：");
         if (!int.TryParse(Console.ReadLine(), out generationStartChapter))
         {
@@ -198,73 +190,119 @@ internal sealed class NovelChapterGenerator
             return false;
         }
 
-        if (generationStartChapter < outline.StartChapter
-            || generationEndChapter > outline.EndChapter)
+        if (generationStartChapter < summaries.StartChapter
+            || generationEndChapter > summaries.EndChapter)
         {
-            Console.WriteLine(
-                $"生成范围必须位于所选大纲的第 {outline.StartChapter} 章至第 {outline.EndChapter} 章之间。");
+            Console.WriteLine($"生成范围必须位于改写摘要的第 {summaries.StartChapter} 章至第 {summaries.EndChapter} 章之间。");
             return false;
         }
 
         return true;
     }
 
-    private string? SelectOutlineFile()
+    private string? SelectSummaryDirectory()
     {
-        var files = Directory.GetFiles(rewrittenOutlineRootPath, "*.json", SearchOption.AllDirectories)
-            .Where(path => !string.Equals(Path.GetFileName(path), ConfigFileName, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(
-                path => Path.GetRelativePath(rewrittenOutlineRootPath, path),
-                StringComparer.CurrentCultureIgnoreCase)
+        var directories = Directory.GetDirectories(rewrittenSummaryRootPath, "*", SearchOption.TopDirectoryOnly)
+            .Where(directory => Directory.GetFiles(directory, SummaryFileSearchPattern, SearchOption.TopDirectoryOnly).Length > 0)
+            .OrderBy(Path.GetFileName, StringComparer.CurrentCultureIgnoreCase)
             .ToArray();
-        if (files.Length == 0)
+        if (directories.Length == 0)
         {
-            Console.WriteLine($"“大纲改写”目录下没有大纲 JSON 文件：{rewrittenOutlineRootPath}");
+            Console.WriteLine($"“新改写摘要”目录下没有可用于生成正文的小说文件夹：{rewrittenSummaryRootPath}");
             return null;
         }
 
-        Console.WriteLine("请选择用于生成正文的大纲：");
+        Console.WriteLine("请选择用于生成正文的小说：");
         Console.WriteLine("0. 返回");
-        for (var index = 0; index < files.Length; index++)
+        for (var index = 0; index < directories.Length; index++)
         {
-            var hasConfig = File.Exists(Path.Combine(Path.GetDirectoryName(files[index])!, ConfigFileName));
-            Console.WriteLine($"{index + 1}. {Path.GetRelativePath(rewrittenOutlineRootPath, files[index])}" +
-                              $"{(hasConfig ? string.Empty : "（缺少大纲配置）")}");
+            var hasConfig = File.Exists(Path.Combine(directories[index], ConfigFileName));
+            Console.WriteLine($"{index + 1}. {Path.GetFileName(directories[index])}" +
+                              (hasConfig ? string.Empty : "（缺少正文风格配置）"));
         }
 
         Console.Write("请输入序号：");
         if (!int.TryParse(Console.ReadLine(), out var selectedIndex)
             || selectedIndex < 0
-            || selectedIndex > files.Length)
+            || selectedIndex > directories.Length)
         {
             Console.WriteLine("无效序号");
             return null;
         }
 
-        return selectedIndex == 0 ? null : files[selectedIndex - 1];
+        return selectedIndex == 0 ? null : directories[selectedIndex - 1];
     }
 
-    private static OutlineInfo ParseOutline(string json, string sourceName)
+    private static ChapterSummaries ReadChapterSummaries(string summaryDirectory)
     {
-        var root = JsonNode.Parse(json) as JsonObject
-                   ?? throw new JsonException($"{sourceName} 不是有效的 JSON 对象。");
-        var title = GetRequiredString(root, "大纲标题", sourceName);
-        var start = GetRequiredInteger(root, "起始章节数", sourceName);
-        var end = GetRequiredInteger(root, "结束章节数", sourceName);
-        if (start <= 0 || end < start)
+        var files = Directory.GetFiles(summaryDirectory, SummaryFileSearchPattern, SearchOption.TopDirectoryOnly)
+            .OrderBy(path => path, StringComparer.CurrentCultureIgnoreCase)
+            .ToArray();
+        if (files.Length == 0)
         {
-            throw new JsonException($"{sourceName} 的章节范围无效：{start}-{end}。");
+            throw new InvalidOperationException($"目录下没有改写摘要文件：{summaryDirectory}");
         }
 
-        return new OutlineInfo(title, start, end);
+        var summaries = new Dictionary<int, JsonObject>();
+        foreach (var path in files)
+        {
+            var sourceName = Path.GetFileName(path);
+            var root = JsonNode.Parse(File.ReadAllText(path, Encoding.UTF8)) as JsonObject
+                       ?? throw new JsonException($"{sourceName} 不是有效的 JSON 对象。");
+            var batchStart = GetRequiredInteger(root, "起始章节数", sourceName);
+            var batchEnd = GetRequiredInteger(root, "结束章节数", sourceName);
+            if (batchStart <= 0 || batchEnd < batchStart)
+            {
+                throw new JsonException($"{sourceName} 的章节范围无效：{batchStart}-{batchEnd}。");
+            }
+
+            var batchSummaries = root["章节摘要"] as JsonArray
+                                 ?? throw new JsonException($"{sourceName} 缺少数组字段“章节摘要”。");
+            if (batchSummaries.Count != batchEnd - batchStart + 1)
+            {
+                throw new JsonException($"{sourceName} 的章节摘要数量与章节范围不一致。");
+            }
+
+            for (var index = 0; index < batchSummaries.Count; index++)
+            {
+                if (batchSummaries[index] is not JsonObject summary)
+                {
+                    throw new JsonException($"{sourceName} 的第 {index + 1} 条章节摘要不是 JSON 对象。");
+                }
+
+                var chapterNumber = GetRequiredInteger(summary, "章节数", sourceName);
+                var expectedChapter = batchStart + index;
+                if (chapterNumber != expectedChapter)
+                {
+                    throw new JsonException($"{sourceName} 的第 {index + 1} 条摘要章节数为 {chapterNumber}，应为 {expectedChapter}。");
+                }
+
+                if (!summaries.TryAdd(chapterNumber, summary))
+                {
+                    throw new JsonException($"第 {chapterNumber} 章在多个改写摘要文件中重复出现。");
+                }
+            }
+        }
+
+        var startChapter = summaries.Keys.Min();
+        var endChapter = summaries.Keys.Max();
+        for (var chapterNumber = startChapter; chapterNumber <= endChapter; chapterNumber++)
+        {
+            if (!summaries.ContainsKey(chapterNumber))
+            {
+                throw new JsonException($"改写摘要不连续：缺少第 {chapterNumber} 章摘要。");
+            }
+        }
+
+        return new ChapterSummaries(startChapter, endChapter, summaries);
     }
 
     private static GenerationConfig ParseConfig(string json)
     {
         var root = JsonNode.Parse(json) as JsonObject
                    ?? throw new JsonException($"{ConfigFileName} 不是有效的 JSON 对象。");
-        var styleObject = root["作者个人风格"] as JsonObject
-                          ?? throw new JsonException("配置缺少对象字段“作者个人风格”。");
+        var styleObject = root["正文风格"] as JsonObject
+                          ?? throw new JsonException("配置缺少对象字段“正文风格”。");
         var style = styleObject["值"]?.GetValue<string>()?.Trim() ?? string.Empty;
         var lengthObject = root["章节字数（范围区间）"] as JsonObject
                            ?? throw new JsonException("配置缺少对象字段“章节字数（范围区间）”。");
@@ -276,6 +314,80 @@ internal sealed class NovelChapterGenerator
         }
 
         return new GenerationConfig(style, minimum, maximum);
+    }
+
+    private static string CallAi(
+        string configJson,
+        GenerationConfig config,
+        int chapterNumber,
+        string currentSummaryJson)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = ResolveCodexCommand(),
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardInputEncoding = Encoding.UTF8,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+
+        startInfo.ArgumentList.Add("exec");
+        startInfo.ArgumentList.Add("--skip-git-repo-check");
+        startInfo.ArgumentList.Add("--output-schema");
+        startInfo.ArgumentList.Add(ResolveSchemaPath());
+        startInfo.ArgumentList.Add("-");
+
+        using var process = Process.Start(startInfo)
+                            ?? throw new InvalidOperationException("启动 Codex 失败。");
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+
+        process.StandardInput.Write(BuildPrompt(configJson, config, chapterNumber, currentSummaryJson));
+        process.StandardInput.Close();
+        process.WaitForExit();
+
+        var output = outputTask.GetAwaiter().GetResult();
+        var error = errorTask.GetAwaiter().GetResult();
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"Codex 执行失败，ExitCode={process.ExitCode}。{error}");
+        }
+
+        return output;
+    }
+
+    private static string BuildPrompt(
+        string configJson,
+        GenerationConfig config,
+        int chapterNumber,
+        string currentSummaryJson)
+    {
+        var style = string.IsNullOrWhiteSpace(config.BodyStyle)
+            ? "未指定额外正文风格；使用自然、流畅、有画面感的中文商业小说文风。"
+            : config.BodyStyle;
+
+        return $$"""
+你是一名中文商业小说作者。请只根据“本章改写摘要”和“正文风格配置”撰写第 {{chapterNumber}} 章正文。
+
+硬性要求：
+1. 输出必须严格符合给定 JSON Schema，只输出 JSON，不要输出 Markdown、代码块或解释。
+2. “章节数”必须为 {{chapterNumber}}；“章节标题”简短明确；“正文”中不要重复章节标题。
+3. 正文尽量控制在 {{config.MinimumLength}} 至 {{config.MaximumLength}} 字，不得用重复句或无意义对话凑字数。
+4. 只能展开本章改写摘要中的事件、人物状态、时间线、关系和线索；不得读取、概括、补写或提前完成其他章节的剧情。
+5. 本次输入没有整套摘要，也没有整体大纲。信息不足时应保守处理，不要编造与本章摘要冲突的设定或关键事件。
+6. 正文应有场景推进、动作、对话及必要描写，章末形成自然收束、悬念或下一章推动力。
+7. 正文风格要求：{{style}}
+8. 使用简体中文，不要提及摘要、配置、AI、提示词或创作过程，不要写本章总结。
+
+正文风格配置 JSON：
+{{configJson}}
+
+本章改写摘要 JSON（仅此一章）：
+{{currentSummaryJson}}
+""";
     }
 
     private static GeneratedChapter ParseGeneratedChapter(string json, int expectedNumber)
@@ -300,7 +412,7 @@ internal sealed class NovelChapterGenerator
             || !value.TryGetValue<string>(out var result)
             || string.IsNullOrWhiteSpace(result))
         {
-            throw new JsonException($"{sourceName} 的字段“{propertyName}”必须是非空字符串。");
+            throw new JsonException($"{sourceName} 缺少非空字符串字段“{propertyName}”。");
         }
 
         return result.Trim();
@@ -310,96 +422,10 @@ internal sealed class NovelChapterGenerator
     {
         if (root[propertyName] is not JsonValue value || !value.TryGetValue<int>(out var result))
         {
-            throw new JsonException($"{sourceName} 的字段“{propertyName}”必须是整数。");
+            throw new JsonException($"{sourceName} 缺少整数字段“{propertyName}”。");
         }
 
         return result;
-    }
-
-    private static string CallAi(
-        string outlineJson,
-        string configJson,
-        GenerationConfig config,
-        int chapterNumber,
-        string? previousChapterText)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = ResolveCodexCommand(),
-            UseShellExecute = false,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardInputEncoding = Encoding.UTF8,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8
-        };
-        startInfo.ArgumentList.Add("exec");
-        startInfo.ArgumentList.Add("--skip-git-repo-check");
-        startInfo.ArgumentList.Add("--output-schema");
-        startInfo.ArgumentList.Add(ResolveSchemaPath());
-        startInfo.ArgumentList.Add("-");
-
-        using var process = Process.Start(startInfo)
-                            ?? throw new InvalidOperationException("启动 Codex 失败。");
-        var outputTask = process.StandardOutput.ReadToEndAsync();
-        var errorTask = process.StandardError.ReadToEndAsync();
-        process.StandardInput.Write(BuildPrompt(
-            outlineJson,
-            configJson,
-            config,
-            chapterNumber,
-            previousChapterText));
-        process.StandardInput.Close();
-        process.WaitForExit();
-
-        var output = outputTask.GetAwaiter().GetResult();
-        var error = errorTask.GetAwaiter().GetResult();
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"Codex 执行失败，ExitCode={process.ExitCode}。{error}");
-        }
-
-        return output;
-    }
-
-    private static string BuildPrompt(
-        string outlineJson,
-        string configJson,
-        GenerationConfig config,
-        int chapterNumber,
-        string? previousChapterText)
-    {
-        var style = string.IsNullOrWhiteSpace(config.AuthorStyle)
-            ? "未指定额外个人风格；使用自然、流畅、有画面感的中文商业小说文风。"
-            : config.AuthorStyle;
-        var previous = string.IsNullOrWhiteSpace(previousChapterText)
-            ? "这是本次大纲范围内的第一章，没有上一章正文。"
-            : previousChapterText;
-
-        return $$"""
-你是一名中文商业小说作者。请严格根据结构化大纲撰写第 {{chapterNumber}} 章正文。
-
-硬性要求：
-1. 输出必须严格符合给定 JSON Schema，只输出 JSON，不要输出 Markdown、代码块或解释。
-2. “章节数”必须为 {{chapterNumber}}；“章节标题”简短明确；“正文”中不要重复章节标题。
-3. 正文尽量控制在 {{config.MinimumLength}} 至 {{config.MaximumLength}} 字，不得用重复句或无意义对话凑字数。
-4. 只展开大纲中属于第 {{chapterNumber}} 章的事件、人物变化和线索，不得提前完成后续章节剧情。
-5. 结合总体概述、阶段大纲、人物脉络、主线、设定与阶段衔接，保证动机、规则、状态、时间线和因果一致。
-6. 与上一章自然衔接，保留已发生的事实，避免重复已经完整描写过的情节。
-7. 作者个人风格：{{style}}
-8. 正文应有场景推进、动作、对话及必要描写，章末形成自然收束、悬念或下一章推动力。
-9. 使用简体中文，不要提及大纲、配置、AI、提示词或创作过程，不要写本章总结。
-
-正文生成配置 JSON：
-{{configJson}}
-
-完整结构化大纲 JSON：
-{{outlineJson}}
-
-上一章正文或衔接信息：
-{{previous}}
-""";
     }
 
     private static string? FindExistingChapterFile(string bookOutputPath, int chapterNumber)
@@ -412,29 +438,6 @@ internal sealed class NovelChapterGenerator
         return Directory.GetFiles(bookOutputPath, $"{chapterNumber:D4}_*.txt")
             .OrderBy(path => path, StringComparer.CurrentCultureIgnoreCase)
             .FirstOrDefault();
-    }
-
-    private static string? TryReadText(string path)
-    {
-        try
-        {
-            return File.ReadAllText(path, Encoding.UTF8);
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-    }
-
-    private static string GetBookName(string outlinePath, string fallbackTitle)
-    {
-        var directoryName = Path.GetFileName(Path.GetDirectoryName(outlinePath)) ?? string.Empty;
-        if (directoryName.EndsWith("_章节", StringComparison.OrdinalIgnoreCase))
-        {
-            directoryName = directoryName[..^"_章节".Length];
-        }
-
-        return SanitizePathSegment(directoryName, fallbackTitle, 80);
     }
 
     private static string SanitizePathSegment(string value, string fallback, int maximumLength)
@@ -479,7 +482,11 @@ internal sealed class NovelChapterGenerator
             : throw new FileNotFoundException($"未找到结构化输出 Schema：{ChapterSchemaFileName}");
     }
 
-    private sealed record OutlineInfo(string Title, int StartChapter, int EndChapter);
-    private sealed record GenerationConfig(string AuthorStyle, int MinimumLength, int MaximumLength);
+    private sealed record ChapterSummaries(
+        int StartChapter,
+        int EndChapter,
+        IReadOnlyDictionary<int, JsonObject> ByChapter);
+
+    private sealed record GenerationConfig(string BodyStyle, int MinimumLength, int MaximumLength);
     private sealed record GeneratedChapter(int Number, string Title, string Content);
 }

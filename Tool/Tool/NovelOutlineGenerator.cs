@@ -267,14 +267,15 @@ internal sealed class NovelOutlineGenerator
 要求：
 1. 只能依据输入摘要，不得补写原文中没有的信息。
 2. 输出必须严格符合给定 JSON Schema，只输出 JSON，不要输出 Markdown 或解释。
-3. “阶段大纲”应按剧情目标、场景或冲突的变化划分，不要机械地每章一个阶段；章节较少时可以只有一个阶段。
-4. 每个阶段必须标明覆盖的起止章节；“主要事件”要合并重复内容，并通过“涉及章节”保留来源。
-5. “叙事主线”和“情感主线”提炼真正贯穿多章的内容，不要逐章复述。
-6. “人物脉络”只保留对本范围剧情有推动作用的重要人物；没有明确变化时写“无明确变化”。
-7. “设定与线索”需要合并重复信息，并判断其类型和在本范围内的状态；无法判断时状态写“未明”。
-8. 如果只有一个剧情阶段，“阶段衔接”输出空数组。
-9. 大纲中的起始章节数必须是 {{startChapter}}，结束章节数必须是 {{endChapter}}。
-10. 所有文字字段使用简体中文，表达清晰、紧凑，避免空泛评价。
+3. “阶段大纲”只按故事目标、场景、冲突或因果关系的自然变化划分，并按故事发生顺序排列；不要给阶段预分章节数或章节范围。
+4. “主要事件”按先后顺序合并重复内容，写清事件本身、前因后果及其推动作用；不要输出“涉及章节”等章节定位信息。
+5. 大纲只负责把故事、人物动机、冲突、转折和结果交代清楚。具体章节拆分、篇幅分配和节奏快慢由后续 AI 根据生成范围自主决定。
+6. “叙事主线”和“情感主线”提炼真正贯穿故事的内容，不要逐章复述。
+7. “人物脉络”只保留对剧情有推动作用的重要人物；没有明确变化时写“无明确变化”。
+8. “设定与线索”需要合并重复信息，并判断其类型和在本范围内的状态；无法判断时状态写“未明”，不要附加章节序号。
+9. 如果只有一个剧情阶段，“阶段衔接”输出空数组。
+10. 顶层“起始章节数”和“结束章节数”只是工具使用的范围元数据，必须分别为 {{startChapter}} 和 {{endChapter}}，不得据此给内部事件强行分章。
+11. 所有文字字段使用简体中文，表达具体、清晰、紧凑，避免空泛评价。
 
 合并后的章节摘要 JSON 数组：
 {{mergedSummaryJson}}
@@ -340,15 +341,12 @@ internal sealed class NovelOutlineGenerator
 
     private sealed record OutlineStage(
         [property: JsonPropertyName("阶段名称")] string Name,
-        [property: JsonPropertyName("起始章节数")] int StartChapter,
-        [property: JsonPropertyName("结束章节数")] int EndChapter,
         [property: JsonPropertyName("阶段概述")] string Overview,
         [property: JsonPropertyName("主要事件")] OutlineEvent[] MainEvents,
         [property: JsonPropertyName("关键转折")] string[] TurningPoints,
         [property: JsonPropertyName("阶段结果")] string Result);
 
     private sealed record OutlineEvent(
-        [property: JsonPropertyName("涉及章节")] int[] Chapters,
         [property: JsonPropertyName("事件")] string Event,
         [property: JsonPropertyName("作用")] string Purpose);
 
@@ -361,7 +359,6 @@ internal sealed class NovelOutlineGenerator
 
     private sealed record SettingOrClue(
         [property: JsonPropertyName("内容")] string Content,
-        [property: JsonPropertyName("涉及章节")] int[] Chapters,
         [property: JsonPropertyName("类型")] string Type,
         [property: JsonPropertyName("状态")] string Status,
         [property: JsonPropertyName("大纲作用")] string Purpose);

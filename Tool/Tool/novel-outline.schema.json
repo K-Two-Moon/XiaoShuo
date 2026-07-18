@@ -48,8 +48,6 @@
         "additionalProperties": false,
         "required": [
           "阶段名称",
-          "起始章节数",
-          "结束章节数",
           "阶段概述",
           "主要事件",
           "关键转折",
@@ -57,20 +55,17 @@
         ],
         "properties": {
           "阶段名称": { "type": "string" },
-          "起始章节数": { "type": "integer" },
-          "结束章节数": { "type": "integer" },
-          "阶段概述": { "type": "string" },
+          "阶段概述": {
+            "type": "string",
+            "description": "按故事自然推进概述本阶段，不绑定具体章节数量或章节范围。"
+          },
           "主要事件": {
             "type": "array",
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["涉及章节", "事件", "作用"],
+              "required": ["事件", "作用"],
               "properties": {
-                "涉及章节": {
-                  "type": "array",
-                  "items": { "type": "integer" }
-                },
                 "事件": { "type": "string" },
                 "作用": { "type": "string" }
               }
@@ -116,13 +111,9 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["内容", "涉及章节", "类型", "状态", "大纲作用"],
+        "required": ["内容", "类型", "状态", "大纲作用"],
         "properties": {
           "内容": { "type": "string" },
-          "涉及章节": {
-            "type": "array",
-            "items": { "type": "integer" }
-          },
           "类型": {
             "type": "string",
             "enum": ["设定", "线索", "伏笔", "能力", "关系", "目标", "风险", "其他"]
