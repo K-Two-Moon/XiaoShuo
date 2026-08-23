@@ -4,6 +4,11 @@
 # 保留同步规则本身。
 !/.gitignore
 
+# Codex project skills.
+!/.codex/
+!/.codex/skills/
+!/.codex/skills/**
+
 # 同步文件夹下的所有内容。
 !/原文/
 !/原文/**

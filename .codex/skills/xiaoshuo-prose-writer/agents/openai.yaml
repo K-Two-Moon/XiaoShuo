@@ -1,0 +1,4 @@
+interface:
+  display_name: "小说正文生成器"
+  short_description: "根据设定资料生成连贯且前后一致的小说正文与章节内容"
+  default_prompt: "使用小说正文生成器，先读取已配置的设定文件，再生成或续写指定章节正文。"

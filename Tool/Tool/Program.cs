@@ -23,12 +23,6 @@ namespace Tool
             {
                 Console.WriteLine("=== 小说工具 ===");
                 Console.WriteLine("1. 按章节拆分小说为JSON文件");
-                Console.WriteLine("2. 按章读取小说JSON文件生成章节摘要");
-                Console.WriteLine("3. 合并章节摘要并生成结构化大纲");
-                Console.WriteLine("4. 修改已有大纲的题材和风格");
-                Console.WriteLine("5. 初始化正文风格配置（保存至新改写摘要）");
-                Console.WriteLine("6. 根据改写大纲分批生成章节摘要（每批 20 章）");
-                Console.WriteLine("7. 根据新改写摘要和正文风格配置逐章生成正文");
                 Console.WriteLine("0. 退出");
                 Console.Write("请选择：");
 
@@ -51,120 +45,6 @@ namespace Tool
                         Console.WriteLine("处理完成");
                         Console.WriteLine();
                         break;
-
-                    case "2":
-                        var chapterSplitPath = FindSourceDirectory(chapterSplitFolderName);
-                        if (string.IsNullOrWhiteSpace(chapterSplitPath))
-                        {
-                            Console.WriteLine("未找到工程目录下的“章节拆分”文件夹");
-                            Console.WriteLine();
-                            break;
-                        }
-                        var summaryFolderPath = FindSourceDirectory(summaryFolderName);
-                        if (string.IsNullOrWhiteSpace(summaryFolderPath))
-                        {
-                            Console.WriteLine("未找到工程目录下的“摘要”文件夹");
-                            Console.WriteLine();
-                            break;
-                        }
-                        NovelSummarizer summarizer = new NovelSummarizer(chapterSplitPath, summaryFolderPath);
-                        summarizer.run();
-                        Console.WriteLine("处理完成");
-                        break;
-
-                    case "3":
-                    {
-                        var summaryRootPath = FindSourceDirectory(summaryFolderName);
-                        if (string.IsNullOrWhiteSpace(summaryRootPath))
-                        {
-                            Console.WriteLine("未找到工程目录下的“摘要”文件夹");
-                            Console.WriteLine();
-                            break;
-                        }
-
-                        var projectRootPath = Directory.GetParent(summaryRootPath)?.FullName
-                                              ?? Directory.GetCurrentDirectory();
-                        var outlineRootPath = Path.Combine(projectRootPath, outlineFolderName);
-                        var outlineGenerator = new NovelOutlineGenerator(summaryRootPath, outlineRootPath);
-                        outlineGenerator.Run();
-                        Console.WriteLine();
-                        break;
-                    }
-                    case "4":
-                    {
-                        var outlineRootPath = FindSourceDirectory(outlineFolderName);
-                        if (string.IsNullOrWhiteSpace(outlineRootPath))
-                        {
-                            Console.WriteLine("未找到工程目录下的“大纲”文件夹");
-                            Console.WriteLine();
-                            break;
-                        }
-
-                        var projectRootPath = Directory.GetParent(outlineRootPath)?.FullName
-                                              ?? Directory.GetCurrentDirectory();
-                        var rewrittenOutlineRootPath = Path.Combine(projectRootPath, rewrittenOutlineFolderName);
-                        var outlineRewriter = new NovelOutlineStyleRewriter(
-                            outlineRootPath,
-                            rewrittenOutlineRootPath);
-                        outlineRewriter.Run();
-                        Console.WriteLine();
-                        break;
-                    }
-                    case "5":
-                    {
-                        var rewrittenSummaryRootPath = FindSourceDirectory(rewrittenSummaryFolderName);
-                        if (string.IsNullOrWhiteSpace(rewrittenSummaryRootPath))
-                        {
-                            Console.WriteLine("未找到工程目录下的“新改写摘要”文件夹，请先运行选项 6 生成摘要。");
-                            Console.WriteLine();
-                            break;
-                        }
-
-                        var configInitializer = new NovelStyleConfigInitializer(rewrittenSummaryRootPath);
-                        configInitializer.Run();
-                        Console.WriteLine();
-                        break;
-                    }
-                    case "6":
-                    {
-                        var rewrittenOutlineRootPath = FindSourceDirectory(rewrittenOutlineFolderName);
-                        if (string.IsNullOrWhiteSpace(rewrittenOutlineRootPath))
-                        {
-                            Console.WriteLine("未找到工程目录下的“大纲改写”文件夹");
-                            Console.WriteLine();
-                            break;
-                        }
-
-                        var projectRootPath = Directory.GetParent(rewrittenOutlineRootPath)?.FullName
-                                              ?? Directory.GetCurrentDirectory();
-                        var rewrittenSummaryRootPath = Path.Combine(projectRootPath, rewrittenSummaryFolderName);
-                        var rewrittenOutlineSummarizer = new RewrittenOutlineSummarizer(
-                            rewrittenOutlineRootPath,
-                            rewrittenSummaryRootPath);
-                        rewrittenOutlineSummarizer.Run();
-                        Console.WriteLine();
-                        break;
-                    }
-                    case "7":
-                    {
-                        var rewrittenSummaryRootPath = FindSourceDirectory(rewrittenSummaryFolderName);
-                        if (string.IsNullOrWhiteSpace(rewrittenSummaryRootPath))
-                        {
-                            Console.WriteLine("未找到工程目录下的“新改写摘要”文件夹，请先运行选项 6 生成摘要。");
-                            Console.WriteLine();
-                            break;
-                        }
-
-                        var projectRootPath = Directory.GetParent(rewrittenSummaryRootPath)?.FullName
-                                              ?? Directory.GetCurrentDirectory();
-                        var contentRootPath = Path.Combine(projectRootPath, contentFolderName);
-                        var chapterGenerator = new NovelChapterGenerator(
-                            rewrittenSummaryRootPath,
-                            contentRootPath);
-                        chapterGenerator.Run();
-                        Console.WriteLine();
-                        break;
-                    }
                     case "0":
                         Console.WriteLine("已退出");
                         return;
